@@ -6,3 +6,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # ci.yml and release.yml pin this action to the rust-toolchain.toml
+      # channel (1.97.1) and to the declared MSRV (1.89.0) so the bundle
+      # stays byte-reproducible; bumping it blindly breaks the pin (and once
+      # proposed the nonexistent 1.100.0). Toolchain bumps are deliberate,
+      # same-commit-as-the-bundle changes.
+      - dependency-name: dtolnay/rust-toolchain
