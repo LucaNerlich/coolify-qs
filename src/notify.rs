@@ -71,6 +71,16 @@ impl Notifier {
 
         for server in servers {
             for app in &server.apps {
+                // When an app has a per-app error (fetch failure), copy its
+                // prior deployment states into current so they survive the error
+                // and can still notify when the app recovers.
+                if app.error.is_some() {
+                    for (key, status) in &self.seen {
+                        if key.0 == server.url && key.1 == app.uuid {
+                            current.insert(key.clone(), status.clone());
+                        }
+                    }
+                }
                 for deployment in &app.deployments {
                     let Some(id) = deployment.id else {
                         continue;
@@ -389,5 +399,43 @@ mod tests {
         assert_eq!(escape_markup(&notice.app), "&lt;script&gt;");
         assert_eq!(body_of(&notice), "home \u{00B7} a &lt; b &amp; c");
         assert_eq!(escape_markup("plain"), "plain");
+    }
+
+    #[test]
+    fn per_app_error_preserves_deployment_state() {
+        let mut notifier = Notifier::new();
+        // Start with an active deployment
+        notifier.collect(&snapshot(vec![item(1, "in_progress")]));
+
+        // Per-app error arrives (deployments array empty due to fetch failure)
+        let error_snapshot = Status {
+            state: State::Ok,
+            error: None,
+            servers: Some(vec![ServerStatus {
+                name: "home".into(),
+                url: "https://coolify.example.com".into(),
+                online: true,
+                running: 0,
+                queued: 0,
+                failed: 0,
+                error: None,
+                apps: vec![AppStatus {
+                    uuid: "u1".into(),
+                    name: "website".into(),
+                    fqdn: None,
+                    error: Some("timeout fetching deployments".into()),
+                    deployments: vec![],
+                }],
+            }]),
+        };
+        let notices = notifier.collect(&error_snapshot);
+        assert!(notices.is_empty());
+
+        // App recovers and deployment finished: must notify because the
+        // in_progress state survived the error.
+        let notices = notifier.collect(&snapshot(vec![item(1, "finished")]));
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].status, "finished");
+        assert_eq!(notices[0].app, "website");
     }
 }

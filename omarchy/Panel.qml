@@ -265,7 +265,7 @@ Panel {
         width: parent.width
         visible: !(modelData.deployments && modelData.deployments.length > 0)
           && !!modelData.error
-        text: modelData.error || ""
+        text: Model.shortName(modelData.error || "", 200)
         textFormat: Text.PlainText
         color: root.urgent
         font.family: root.fontFamily

@@ -1,13 +1,19 @@
 //! Load the Coolify server configuration from `~/.config/coolify-qs/config.json`.
 
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use serde::Deserialize;
 
 /// Environment variable overriding the config file location.
 pub const CONFIG_ENV: &str = "COOLIFY_QS_CONFIG";
+
+/// Tracks which (path, mode) pairs have already been warned about to avoid
+/// repeated warnings on each reload/watch cycle.
+static WARNED_PERMISSIONS: Mutex<Option<HashSet<(PathBuf, u32)>>> = Mutex::new(None);
 
 /// Hard cap on the config file size (defense in depth: the file is local
 /// and user-owned, but a runaway or hostile file must not OOM the widget).
@@ -103,12 +109,17 @@ impl Config {
             }
             #[cfg(unix)]
             if let Some(mode) = loose_permission_bits(&meta) {
-                eprintln!(
-                    "warning: {} has mode {mode:o} and is readable by other users; \
-                     run `chmod 600 {}` to protect the Coolify API tokens it contains",
-                    path.display(),
-                    path.display()
-                );
+                let mut warned = WARNED_PERMISSIONS.lock().unwrap();
+                let warned = warned.get_or_insert_with(HashSet::new);
+                let key = (path.clone(), mode);
+                if warned.insert(key) {
+                    eprintln!(
+                        "warning: {} has mode {mode:o} and is readable by other users; \
+                         run `chmod 600 {}` to protect the Coolify API tokens it contains",
+                        path.display(),
+                        path.display()
+                    );
+                }
             }
         }
         let raw = fs::read_to_string(&path)
@@ -188,7 +199,7 @@ fn parse_server(index: usize, raw: RawServer) -> Result<Server, ConfigError> {
 fn loose_permission_bits(meta: &fs::Metadata) -> Option<u32> {
     use std::os::unix::fs::PermissionsExt;
     let mode = meta.permissions().mode() & 0o777;
-    (mode & 0o077 != 0).then_some(mode)
+    (mode & 0o044 != 0).then_some(mode)
 }
 
 /// Default config path: `$COOLIFY_QS_CONFIG`, else `$XDG_CONFIG_HOME/coolify-qs/config.json`
@@ -370,22 +381,35 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn loose_permission_bits_flags_group_and_world_access() {
+    fn loose_permission_bits_flags_group_and_world_read() {
         use std::os::unix::fs::PermissionsExt;
         let path = tmp_config("bits", r#"{"servers": []}"#);
 
+        // 0o644: group read + other read = flagged
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         assert_eq!(
             loose_permission_bits(&fs::metadata(&path).unwrap()),
             Some(0o644)
         );
+        // 0o640: group read (no other read) = still flagged
         fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
         assert_eq!(
             loose_permission_bits(&fs::metadata(&path).unwrap()),
             Some(0o640)
         );
+        // 0o604: other read (no group read) = still flagged
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o604)).unwrap();
+        assert_eq!(
+            loose_permission_bits(&fs::metadata(&path).unwrap()),
+            Some(0o604)
+        );
+        // 0o622: group write + other write (no read) = not flagged
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o622)).unwrap();
+        assert_eq!(loose_permission_bits(&fs::metadata(&path).unwrap()), None);
+        // 0o600: owner only = not flagged
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         assert_eq!(loose_permission_bits(&fs::metadata(&path).unwrap()), None);
+        // 0o400: owner read only = not flagged
         fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
         assert_eq!(loose_permission_bits(&fs::metadata(&path).unwrap()), None);
     }

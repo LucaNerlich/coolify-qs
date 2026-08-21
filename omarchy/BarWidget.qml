@@ -196,6 +196,7 @@ BarWidget {
       root.watchFailures = 0
     }
     onExited: {
+      root.lastSnapshotLine = ""
       root.broadcast("clearStatus")
       watchRestartTimer.restart()
     }
@@ -204,6 +205,7 @@ BarWidget {
       var failedStart = !watchProc.startedOnce
       watchProc.startedOnce = false
       if (failedStart) {
+        root.lastSnapshotLine = ""
         root.broadcast("clearStatus")
         root.watchFailures += 1
         if (root.watchFailures >= root.fallbackThreshold) {
