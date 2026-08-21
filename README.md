@@ -165,10 +165,10 @@ qmllint -I "$OMARCHY_PATH/shell" omarchy/BarWidget.qml omarchy/Panel.qml
 `make bundle` rebuilds the statically linked backend into `omarchy/bin/` and
 `make verify-bundle` checks that the committed binary is byte-identical to a
 fresh reproducible build (both need the `x86_64-unknown-linux-musl` target
-and a musl C cross-compiler, e.g. `pacman -S musl` on Arch or the
-[musl.cc](https://musl.cc) toolchain on PATH; the ring TLS backend compiles
-C sources). The toolchain is pinned in `rust-toolchain.toml`, and CI verifies
-the bundle instead of regenerating it.
+and a musl C cross-compiler — `pacman -S musl` on Arch, `musl-tools` on
+Ubuntu, or the [musl.cc](https://musl.cc) toolchain on PATH; the ring TLS
+backend compiles C sources). The toolchain is pinned in
+`rust-toolchain.toml`, and CI verifies the bundle instead of regenerating it.
 
 Saving files under an installed user plugin triggers Quattro's plugin hot
 reload. Rerun `omarchy plugin validate .` after changing the manifest or
