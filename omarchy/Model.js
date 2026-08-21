@@ -43,13 +43,54 @@ function totals(status) {
   };
 }
 
-// Bar label: running and queued counts, plain rocket when idle.
+// Distinct names of applications with a deployment in progress, in
+// first-seen order.
+function runningAppNames(status) {
+  var names = [];
+  if (!status || status.state !== "ok") return names;
+  var servers = Array.isArray(status.servers) ? status.servers : [];
+  for (var i = 0; i < servers.length; i++) {
+    var apps = servers[i] && servers[i].apps;
+    if (!Array.isArray(apps)) continue;
+    for (var j = 0; j < apps.length; j++) {
+      var deps = apps[j] && apps[j].deployments;
+      if (!Array.isArray(deps)) continue;
+      for (var k = 0; k < deps.length; k++) {
+        if (deps[k] && deps[k].status === "in_progress") {
+          var name = String(apps[j].name || apps[j].uuid || "").trim();
+          if (name !== "" && names.indexOf(name) < 0) names.push(name);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+function shortName(name, max) {
+  var s = String(name || "");
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + "\u2026";
+}
+
+// Bar label: the running app name(s) plus the queued count, or a plain
+// rocket when idle.
 function labelText(status) {
   if (!status) return "\uD83D\uDE80 \u2026";
   if (status.state === "error") return "\uD83D\uDE80 !";
   var t = totals(status);
   var parts = [];
-  if (t.running > 0) parts.push("\u27F3 " + t.running);
+  if (t.running > 0) {
+    var names = runningAppNames(status);
+    if (names.length === 0) {
+      parts.push("\u27F3 " + t.running);
+    } else {
+      var shown = names.slice(0, 2).map(function(n) {
+        return shortName(n, 14);
+      });
+      if (names.length > 2) shown.push("+" + (names.length - 2));
+      parts.push("\u27F3 " + shown.join(" \u00B7 "));
+    }
+  }
   if (t.queued > 0) parts.push("\u23F3 " + t.queued);
   if (parts.length === 0) return "\uD83D\uDE80";
   return parts.join(" ");
@@ -219,6 +260,6 @@ if (typeof module !== "undefined" && module.exports) {
     parseLine, totals, labelText, tooltipText, metaLine, isIdle,
     relativeTime, statusGlyph, isActive, shortSha, hostLabel,
     serverLine, deploymentText, statusWord, collapseWhitespace,
-    appsWithDeployments
+    appsWithDeployments, runningAppNames, shortName
   };
 }

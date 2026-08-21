@@ -91,16 +91,35 @@ test("totals sums servers and counts offline", () => {
   assert.equal(t.count, 2);
 });
 
-test("labelText shows running and queued", () => {
+test("labelText names the running app", () => {
   const status = Model.parseLine(JSON.stringify(sampleStatus()));
-  assert.equal(Model.labelText(status), "\u27F3 1 \u23F3 2");
+  assert.equal(Model.labelText(status), "\u27F3 website \u23F3 2");
 });
 
-test("labelText shows only running", () => {
+test("labelText shows only running count without names", () => {
   const status = Model.parseLine(JSON.stringify(sampleStatus({
     servers: [{ name: "home", url: "u", online: true, running: 3, queued: 0, failed: 0, apps: [] }],
   })));
   assert.equal(Model.labelText(status), "\u27F3 3");
+});
+
+test("labelText caps app names and joins", () => {
+  const mk = (name) => ({
+    name: "home", url: "u", online: true, running: 1, queued: 0, failed: 0,
+    apps: [{ uuid: "u", name, deployments: [{ status: "in_progress" }] }],
+  });
+  const two = Model.parseLine(JSON.stringify(sampleStatus({
+    servers: [mk("alpha"), mk("beta")],
+  })));
+  assert.equal(Model.labelText(two), "\u27F3 alpha \u00B7 beta");
+  const many = Model.parseLine(JSON.stringify(sampleStatus({
+    servers: [mk("alpha"), mk("beta"), mk("gamma")],
+  })));
+  assert.equal(Model.labelText(many), "\u27F3 alpha \u00B7 beta \u00B7 +1");
+  const long = Model.parseLine(JSON.stringify(sampleStatus({
+    servers: [mk("a-very-long-application-name-indeed")],
+  })));
+  assert.equal(Model.labelText(long), "\u27F3 a-very-long-a\u2026");
 });
 
 test("labelText idle and error states", () => {
@@ -231,6 +250,29 @@ test("appsWithDeployments filters empty apps", () => {
   assert.equal(shown[0].name, "a");
   assert.equal(Model.appsWithDeployments(null).length, 0);
   assert.equal(Model.appsWithDeployments("nope").length, 0);
+});
+
+test("runningAppNames collects and dedupes", () => {
+  const status = Model.parseLine(JSON.stringify(sampleStatus({
+    servers: [
+      {
+        name: "home", url: "u", online: true, running: 2, queued: 0, failed: 0,
+        apps: [
+          { name: "website", deployments: [{ status: "in_progress" }, { status: "in_progress" }] },
+          { name: "api", deployments: [{ status: "queued" }] },
+        ],
+      },
+    ],
+  })));
+  const names = Model.runningAppNames(status);
+  assert.equal(names.length, 1);
+  assert.equal(names[0], "website");
+  assert.equal(Model.runningAppNames(null).length, 0);
+});
+
+test("shortName truncates with ellipsis", () => {
+  assert.equal(Model.shortName("short", 14), "short");
+  assert.equal(Model.shortName("a-very-long-name", 14), "a-very-long-n\u2026");
 });
 
 test("statusWord humanizes states", () => {
