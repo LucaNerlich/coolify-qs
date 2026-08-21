@@ -18,3 +18,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-application deployments), supporting multiple servers via
   `~/.config/coolify-qs/config.json`, tolerant of the mis-documented
   deployments response shape.
+- Example configuration (`config.example.json`) and a step-by-step
+  configuration guide in the README.

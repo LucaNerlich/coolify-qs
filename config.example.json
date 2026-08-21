@@ -1,0 +1,16 @@
+{
+  "pollIntervalSeconds": 15,
+  "pastPerApp": 5,
+  "servers": [
+    {
+      "name": "home",
+      "url": "https://coolify.example.com",
+      "token": "CHANGE_ME"
+    },
+    {
+      "name": "prod",
+      "url": "https://coolify-prod.example.com",
+      "token": "CHANGE_ME"
+    }
+  ]
+}

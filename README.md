@@ -31,6 +31,31 @@ coolify-qs watch ──(JSON lines)──▶ SplitParser ─▶ BarWidget ─▶
 
 ## Configuration
 
+### Getting started
+
+1. **Create an API token** in each Coolify instance: open its UI, go to
+   **Keys & Tokens → API tokens**, and create a new token. The token needs
+   read access to the applications you want to watch.
+
+2. **Create the config file** from the bundled example:
+
+   ```bash
+   mkdir -p ~/.config/coolify-qs
+   cp config.example.json ~/.config/coolify-qs/config.json
+   chmod 600 ~/.config/coolify-qs/config.json
+   ```
+
+3. **Fill in your servers.** Replace the example entries with your own
+   `url` and `token` values (and set a `name` you like — it defaults to the
+   URL host). Add or remove `servers` entries freely; one entry per Coolify
+   instance.
+
+   The widget re-reads the file on every poll, so changes apply within a
+   poll interval — no shell restart needed. If the file is missing or
+   invalid the bar shows `🚀 !` with the reason in the panel.
+
+### Format
+
 ```json
 {
   "pollIntervalSeconds": 15,
@@ -45,6 +70,9 @@ coolify-qs watch ──(JSON lines)──▶ SplitParser ─▶ BarWidget ─▶
 }
 ```
 
+A ready-to-edit example is included in the repository as
+[`config.example.json`](config.example.json).
+
 | Key | Default | Description |
 | --- | --- | --- |
 | `pollIntervalSeconds` | 15 | Poll interval (clamped to 5–3600). |
@@ -54,15 +82,11 @@ coolify-qs watch ──(JSON lines)──▶ SplitParser ─▶ BarWidget ─▶
 | `servers[].url` | required | Coolify instance URL, `https://` or `http://`. |
 | `servers[].token` | required | API token (Coolify → Keys & Tokens → API tokens). |
 
-The file is re-read on every poll, so servers can be added or edited without
-restarting the shell. The `COOLIFY_QS_CONFIG` environment variable overrides
-the path entirely; otherwise the backend reads
-`$XDG_CONFIG_HOME/coolify-qs/config.json` (defaulting to
-`~/.config/coolify-qs/config.json`).
-Tokens never leave the process — the watch stream contains no secrets.
-
-Create the token in Coolify under **Keys & Tokens → API tokens**. The token
-needs read access to the applications you want to watch.
+The `COOLIFY_QS_CONFIG` environment variable overrides the path entirely;
+otherwise the backend reads `$XDG_CONFIG_HOME/coolify-qs/config.json`
+(defaulting to `~/.config/coolify-qs/config.json`). Tokens never leave the
+process — the watch stream contains no secrets. Keep the file readable only
+by your user (`chmod 600`), it holds your API tokens.
 
 ## Install
 
