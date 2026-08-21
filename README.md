@@ -77,6 +77,7 @@ A ready-to-edit example is included in the repository as
 | --- | --- | --- |
 | `pollIntervalSeconds` | 15 | Poll interval (clamped to 5–3600). |
 | `pastPerApp` | 5 | Number of recent deployments to fetch per application (1–100). |
+| `notifications` | true | Send a desktop notification when a deployment finishes or fails. |
 | `servers` | required | One entry per Coolify instance. |
 | `servers[].name` | host | Display name; defaults to the URL host. |
 | `servers[].url` | required | Coolify instance URL, `https://` or `http://`. |
@@ -109,17 +110,24 @@ non-x86_64 machine, missing exec bit, whatever — the widget falls back to a
 
 ## Usage
 
-- **Bar**: shows `⟳ 1` (deployments in progress) and `⏳ 2` (queued) across
-  all servers, or a plain `🚀` when idle. Turns urgent (`🚀 !`) on config
-  errors. Left- or right-click opens the panel.
+- **Bar**: shows the running application's name (`⟳ website`, up to two
+  names plus an overflow count) and the queued count (`⏳ 2`), or a plain
+  `🚀` when idle. Turns urgent (`🚀 !`) on config errors. Left- or
+  right-click opens the panel.
 - **Panel**:
-  - Grouped by server, then application. Each application lists its current
-    and recent deployments: status glyph (`⟳` running, `⏳` queued, `✓`
-    finished, `✗` failed, `⊘` cancelled), commit message, short commit sha,
-    and relative time.
+  - One column per server. Each application lists its current and recent
+    deployments: status glyph (`⟳` running, `⏳` queued, `✓` finished,
+    `✗` failed, `⊘` cancelled), commit message, short commit sha, and
+    relative time. Long messages wrap inside their column; apps without
+    deployment history collapse into a muted count caption.
   - Click a deployment row to open it in the Coolify UI; click a server
     header's host line to open the server.
   - Offline servers show their error inline.
+- **Notifications**: when a deployment that was running or queued settles,
+  a desktop notification appears through the Omarchy notification service:
+  `✓ website deployed` on success, `✗ website deployment failed` on failure
+  (with the commit message and server). Disable with
+  `"notifications": false` in the config.
 - **Shell**: `omarchy-shell shell summon luca.coolify '{}'` opens the panel,
   `omarchy-shell shell hide luca.coolify` closes it.
 

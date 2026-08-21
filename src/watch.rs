@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::config::Config;
+use crate::notify::Notifier;
 use crate::status::{self, Status};
 
 /// Retry delay when the config cannot be loaded (e.g. the file does not
@@ -12,17 +13,20 @@ use crate::status::{self, Status};
 const CONFIG_RETRY_SECS: u64 = 5;
 
 /// Poll all servers forever, printing a JSON line whenever the aggregated
-/// snapshot changes. The config file is re-read every cycle, so servers and
-/// intervals can be edited without restarting the shell.
+/// snapshot changes, and notifying on finished/failed deployments. The
+/// config file is re-read every cycle, so servers and intervals can be
+/// edited without restarting the shell.
 pub fn watch() {
     let mut last: Option<String> = None;
+    let mut notifier = Notifier::new();
     loop {
-        let (snapshot, interval_secs) = match Config::load() {
+        let (snapshot, interval_secs, notify) = match Config::load() {
             Ok(config) => {
                 let interval = config.poll_interval_secs;
-                (status::snapshot(&config), interval)
+                let notify = config.notifications;
+                (status::snapshot(&config), interval, notify)
             }
-            Err(err) => (Status::error(err.to_string()), CONFIG_RETRY_SECS),
+            Err(err) => (Status::error(err.to_string()), CONFIG_RETRY_SECS, false),
         };
 
         let line = serde_json::to_string(&snapshot).expect("snapshot serializes");
@@ -33,6 +37,9 @@ pub fn watch() {
                 return;
             }
             last = Some(line);
+            if notify {
+                notifier.process(&snapshot);
+            }
         }
 
         thread::sleep(Duration::from_secs(interval_secs));

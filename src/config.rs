@@ -22,6 +22,7 @@ pub const MAX_PAST_PER_APP: u32 = 100;
 pub struct Config {
     pub poll_interval_secs: u64,
     pub past_per_app: u32,
+    pub notifications: bool,
     pub servers: Vec<Server>,
 }
 
@@ -39,8 +40,15 @@ struct RawConfig {
     poll_interval_seconds: Option<u64>,
     #[serde(default)]
     past_per_app: Option<u32>,
+    /// Send desktop notifications when deployments finish or fail.
+    #[serde(default = "default_notifications")]
+    notifications: bool,
     #[serde(default)]
     servers: Vec<RawServer>,
+}
+
+fn default_notifications() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +116,7 @@ impl Config {
                 .past_per_app
                 .unwrap_or(5)
                 .clamp(MIN_PAST_PER_APP, MAX_PAST_PER_APP),
+            notifications: raw.notifications,
             servers,
         })
     }
@@ -198,6 +207,7 @@ mod tests {
         let cfg = Config::from_path(path).unwrap();
         assert_eq!(cfg.poll_interval_secs, 30);
         assert_eq!(cfg.past_per_app, 10);
+        assert!(cfg.notifications);
         assert_eq!(cfg.servers.len(), 2);
         assert_eq!(cfg.servers[0].name, "home");
         assert_eq!(cfg.servers[0].url, "https://coolify.example.com");
@@ -214,6 +224,20 @@ mod tests {
         let cfg = Config::from_path(path).unwrap();
         assert_eq!(cfg.poll_interval_secs, 15);
         assert_eq!(cfg.past_per_app, 5);
+        assert!(cfg.notifications);
+    }
+
+    #[test]
+    fn notifications_can_be_disabled() {
+        let path = tmp_config(
+            "no-notify",
+            r#"{
+                "notifications": false,
+                "servers": [{ "url": "https://coolify.example.com", "token": "abc" }]
+            }"#,
+        );
+        let cfg = Config::from_path(path).unwrap();
+        assert!(!cfg.notifications);
     }
 
     #[test]

@@ -344,6 +344,7 @@ mod tests {
         let config = Config {
             poll_interval_secs: 15,
             past_per_app: 5,
+            notifications: true,
             servers: vec![Server {
                 name: "down".into(),
                 url: "https://coolify.example.com".into(),

@@ -7,6 +7,7 @@
 
 pub mod api;
 pub mod config;
+pub mod notify;
 pub mod open;
 pub mod status;
 pub mod watch;

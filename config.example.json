@@ -1,6 +1,7 @@
 {
   "pollIntervalSeconds": 15,
   "pastPerApp": 5,
+  "notifications": true,
   "servers": [
     {
       "name": "home",

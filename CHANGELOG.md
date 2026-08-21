@@ -5,12 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Desktop notifications through the Omarchy notification service when a
+  deployment finishes (`✓ website deployed`) or fails (`✗ website deployment
+  failed`), with commit message and server in the body. Opt out per config
+  with `"notifications": false`.
+
 ## [1.0.0] - 2026-08-21
 
 ### Added
 
 - Bar widget with running (⟳) and queued (⏳) deployment counts across all
-  configured Coolify servers, plus an optional `hideWhenIdle` setting.
+  configured Coolify servers, plus an optional `hideWhenIdle` setting. The
+  bar names the application(s) currently deploying instead of just counting.
 - Panel with one column per configured server showing current and recent
   deployments grouped by application (status glyph, commit message, short
   sha, relative time). Long commit messages wrap inside their column, apps
