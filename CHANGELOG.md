@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-08-21
+
+### Fixed
+
+- CI re-pinned `dtolnay/rust-toolchain` to the rust-toolchain.toml channel
+  (1.97.1) and the declared MSRV (1.89.0) after a Dependabot bump pointed
+  every job at the nonexistent 1.100.0 and broke the reproducibility pin.
+  Dependabot now ignores that action so toolchain bumps stay deliberate,
+  bundle-regenerating changes.
+
 ## [1.0.3] - 2026-08-21
 
 ### Fixed
