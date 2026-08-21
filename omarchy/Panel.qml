@@ -7,8 +7,8 @@ import qs.Ui
 import "Model.js" as Model
 
 // Native Quattro popup for Coolify deployments: current and recent
-// deployments grouped by server and application. State flows in from
-// BarWidget.qml (fed by the Rust watch stream).
+// deployments in one column per server. State flows in from BarWidget.qml
+// (fed by the Rust watch stream).
 Panel {
   id: root
   moduleName: "luca.coolify"
@@ -24,6 +24,9 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color active: Color.bar.active
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+
+  // Per-server column width. Long commit messages elide inside it.
+  readonly property int serverColumnWidth: Style.space(300)
 
   readonly property var status: hasWatcher ? (watcher.status || null) : null
   readonly property bool isError: status !== null && status.state === "error"
@@ -48,87 +51,105 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
+    // Grow with the number of servers (clamped to the screen by
+    // fittedContentWidth), so one column fits without eliding.
+    contentWidth: panel.fittedContentWidth(
+      Math.max(Style.space(340), serversRow.implicitWidth))
+    contentHeight: panel.fittedContentHeight(
+      column.implicitHeight, Style.space(560))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
-    }
+      onMoveRequested: function(dx, dy) {
+        if (dy === 0) return
+        panelFlick.contentY = Math.max(0, Math.min(
+          panelFlick.contentY + dy * Style.space(44),
+          Math.max(0, panelFlick.contentHeight - panelFlick.height)))
+      }
 
-    Flickable {
-      id: panelFlick
-      anchors.fill: parent
-      contentWidth: width
-      contentHeight: column.implicitHeight
-      clip: true
-      boundsBehavior: Flickable.StopAtBounds
-      flickableDirection: Flickable.VerticalFlick
-      interactive: contentHeight > height
-      ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+      Flickable {
+        id: panelFlick
+        anchors.fill: parent
+        contentWidth: column.implicitWidth
+        contentHeight: column.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.HorizontalAndVerticalFlick
+        interactive: contentHeight > height || contentWidth > width
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
 
-      Column {
-        id: column
-        width: panelFlick.width
-        spacing: Style.space(10)
+        Column {
+          id: column
+          width: Math.max(panelFlick.width, panelFlick.contentWidth)
+          spacing: Style.space(10)
 
-        PanelHero {
-          width: parent.width
-          title: "Coolify"
-          meta: Model.metaLine(root.status)
-          detail: root.isError
-            ? (status.error || "Config error")
-            : "Deployments across your Coolify servers"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
+          PanelHero {
+            width: parent.width
+            title: "Coolify"
+            meta: Model.metaLine(root.status)
+            detail: root.isError
+              ? (status.error || "Config error")
+              : "Deployments across your Coolify servers"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
 
-          iconComponent: Component {
-            Text {
-              text: "\uD83D\uDE80"
-              textFormat: Text.PlainText
-              color: root.isError ? root.urgent : root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.display
+            iconComponent: Component {
+              Text {
+                text: "\uD83D\uDE80"
+                textFormat: Text.PlainText
+                color: root.isError ? root.urgent : root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.display
+              }
             }
           }
-        }
 
-        Text {
-          width: parent.width
-          visible: root.isError
-          text: "Create ~/.config/coolify-qs/config.json with your servers and tokens."
-          textFormat: Text.PlainText
-          color: Qt.darker(root.foreground, 1.4)
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.WordWrap
-        }
+          Text {
+            width: parent.width
+            visible: root.isError
+            text: "Create ~/.config/coolify-qs/config.json with your servers and tokens."
+            textFormat: Text.PlainText
+            color: Qt.darker(root.foreground, 1.4)
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
 
-        Text {
-          width: parent.width
-          visible: root.status !== null && !root.isError && root.servers.length === 0
-          text: "No servers configured."
-          textFormat: Text.PlainText
-          color: Qt.darker(root.foreground, 1.4)
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-        }
+          Text {
+            width: parent.width
+            visible: root.status !== null && !root.isError && root.servers.length === 0
+            text: "No servers configured."
+            textFormat: Text.PlainText
+            color: Qt.darker(root.foreground, 1.4)
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+          }
 
-        Repeater {
-          model: root.servers
-          delegate: serverDelegate
+          Row {
+            id: serversRow
+            spacing: Style.space(16)
+            visible: root.servers.length > 0
+
+            Repeater {
+              model: root.servers
+              delegate: serverColumnDelegate
+            }
+          }
         }
       }
     }
   }
 
   Component {
-    id: serverDelegate
+    id: serverColumnDelegate
     Column {
-      width: column.width
-      spacing: Style.space(4)
+      id: serverColumn
+      width: root.serverColumnWidth
+      spacing: Style.space(6)
 
       PanelSectionHeader {
         width: parent.width
@@ -175,9 +196,14 @@ Panel {
   Component {
     id: appDelegate
     Column {
-      width: column.width
+      width: root.serverColumnWidth
       spacing: Style.space(2)
-      leftPadding: Style.space(16)
+      topPadding: Style.space(6)
+
+      PanelSeparator {
+        width: parent.width
+        foreground: root.foreground
+      }
 
       RowLayout {
         width: parent.width
@@ -226,7 +252,7 @@ Panel {
   Component {
     id: deploymentDelegate
     RowLayout {
-      width: column.width
+      width: root.serverColumnWidth
       spacing: Style.space(8)
 
       Text {

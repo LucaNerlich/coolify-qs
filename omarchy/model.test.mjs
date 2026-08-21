@@ -203,3 +203,18 @@ test("deploymentText combines message and sha", () => {
   assert.equal(Model.deploymentText({}), "deployment");
   assert.equal(Model.deploymentText(null), "deployment");
 });
+
+test("deploymentText falls back to id and status", () => {
+  assert.equal(Model.deploymentText({ id: 123 }), "#123");
+  assert.equal(Model.deploymentText({ id: 0, status: "failed" }), "failed");
+  assert.equal(Model.deploymentText({ commitMessage: "  ", commit: "", status: "queued" }), "queued");
+});
+
+test("statusWord humanizes states", () => {
+  assert.equal(Model.statusWord("in_progress"), "running");
+  assert.equal(Model.statusWord("queued"), "queued");
+  assert.equal(Model.statusWord("finished"), "finished");
+  assert.equal(Model.statusWord("failed"), "failed");
+  assert.equal(Model.statusWord("cancelled"), "cancelled");
+  assert.equal(Model.statusWord("mystery"), "deployment");
+});

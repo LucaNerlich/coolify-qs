@@ -169,7 +169,9 @@ function serverLine(server) {
   return host + " \u00B7 " + parts.join(" ");
 }
 
-// One-line deployment summary: commit message + short sha.
+// One-line deployment summary: commit message + short sha, falling back to
+// the deployment id and finally the status word so rows without git data
+// still read as something ("#123", "finished") instead of an empty entry.
 function deploymentText(deployment) {
   var d = deployment || {};
   var msg = String(d.commitMessage || "").trim();
@@ -177,13 +179,26 @@ function deploymentText(deployment) {
   if (msg !== "" && sha !== "") return msg + " \u00B7 " + sha;
   if (msg !== "") return msg;
   if (sha !== "") return sha;
-  return "deployment";
+  var id = Number(d.id);
+  if (isFinite(id) && id > 0) return "#" + id;
+  return statusWord(d.status);
+}
+
+function statusWord(status) {
+  switch (String(status || "")) {
+    case "in_progress": return "running";
+    case "queued": return "queued";
+    case "finished": return "finished";
+    case "failed": return "failed";
+    case "cancelled": return "cancelled";
+    default: return "deployment";
+  }
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseLine, totals, labelText, tooltipText, metaLine, isIdle,
     relativeTime, statusGlyph, isActive, shortSha, hostLabel,
-    serverLine, deploymentText
+    serverLine, deploymentText, statusWord
   };
 }

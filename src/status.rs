@@ -45,6 +45,8 @@ pub struct AppStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DeploymentItem {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commit: Option<String>,
@@ -173,17 +175,27 @@ fn fetch_server(server: &Server, past_per_app: u32) -> ServerStatus {
 impl From<Deployment> for DeploymentItem {
     fn from(deployment: Deployment) -> Self {
         Self {
+            id: deployment.id,
             status: deployment
                 .status
                 .map(|s| s.as_str())
                 .unwrap_or("other")
                 .to_string(),
-            commit: deployment.commit,
-            commit_message: deployment.commit_message,
-            created_at: deployment.created_at,
-            deployment_url: deployment.deployment_url,
+            // Coolify often stores empty strings instead of nulls; normalize
+            // them away so the frontend can fall back to id/status instead
+            // of rendering rows with no text at all.
+            commit: clean(deployment.commit),
+            commit_message: clean(deployment.commit_message),
+            created_at: clean(deployment.created_at),
+            deployment_url: clean(deployment.deployment_url),
         }
     }
+}
+
+fn clean(value: Option<String>) -> Option<String> {
+    value
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 #[cfg(test)]
@@ -212,6 +224,7 @@ mod tests {
                 name: "website".into(),
                 fqdn: Some("example.com".into()),
                 deployments: vec![DeploymentItem {
+                    id: Some(10),
                     status: "in_progress".into(),
                     commit: Some("abc1234".into()),
                     commit_message: Some("ship".into()),
@@ -227,6 +240,7 @@ mod tests {
         assert_eq!(server["queued"], 2);
         assert!(server.get("error").is_none());
         let dep = &server["apps"][0]["deployments"][0];
+        assert_eq!(dep["id"], 10);
         assert_eq!(dep["status"], "in_progress");
         assert_eq!(dep["commitMessage"], "ship");
         assert_eq!(dep["createdAt"], "2026-08-21T10:00:00Z");
@@ -234,6 +248,25 @@ mod tests {
             dep["deploymentUrl"],
             "https://coolify.example.com/deployment/1"
         );
+    }
+
+    #[test]
+    fn normalizes_empty_strings_away() {
+        let item = DeploymentItem::from(Deployment {
+            id: Some(7),
+            status: Some(DeploymentStatus::Finished),
+            commit: Some("".into()),
+            commit_message: Some("   ".into()),
+            created_at: None,
+            deployment_url: Some("".into()),
+        });
+        let json = serde_json::to_value(item).unwrap();
+        assert_eq!(json["id"], 7);
+        assert_eq!(json["status"], "finished");
+        assert!(json.get("commit").is_none());
+        assert!(json.get("commitMessage").is_none());
+        assert!(json.get("createdAt").is_none());
+        assert!(json.get("deploymentUrl").is_none());
     }
 
     #[test]
