@@ -255,11 +255,27 @@ function statusWord(status) {
   }
 }
 
+// Escape markup-significant characters so remote-derived strings can be
+// handed to AutoText/StyledText sinks (WidgetButton, PanelHero, section
+// headers, notification popups) without being interpreted.
+function escapeText(value) {
+  return String(value || "").replace(/[&<>"']/g, function(ch) {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      case "'": return "&#39;";
+      default: return ch;
+    }
+  });
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseLine, totals, labelText, tooltipText, metaLine, isIdle,
     relativeTime, statusGlyph, isActive, shortSha, hostLabel,
     serverLine, deploymentText, statusWord, collapseWhitespace,
-    appsWithDeployments, runningAppNames, shortName
+    appsWithDeployments, runningAppNames, shortName, escapeText
   };
 }

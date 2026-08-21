@@ -43,8 +43,11 @@ BarWidget {
   readonly property bool hasActivity: status !== null && status.state === "ok"
     && Model.totals(status).running > 0
 
-  readonly property string labelText: Model.labelText(status)
-  readonly property string tooltipText: Model.tooltipText(status)
+  // WidgetButton renders with AutoText, so the bar label and tooltip — both
+  // of which can contain Coolify-controlled app/server names — are escaped
+  // before they reach the component.
+  readonly property string labelText: Model.escapeText(Model.labelText(status))
+  readonly property string tooltipText: Model.escapeText(Model.tooltipText(status))
   readonly property color urgent: bar ? bar.urgent : Color.urgent
 
   function open() { if (panelItem) panelItem.open() }

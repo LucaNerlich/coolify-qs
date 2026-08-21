@@ -9,6 +9,10 @@ use serde::Deserialize;
 /// Environment variable overriding the config file location.
 pub const CONFIG_ENV: &str = "COOLIFY_QS_CONFIG";
 
+/// Hard cap on the config file size (defense in depth: the file is local
+/// and user-owned, but a runaway or hostile file must not OOM the widget).
+pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+
 /// Lowest allowed poll interval in seconds.
 pub const MIN_POLL_SECS: u64 = 5;
 /// Highest allowed poll interval in seconds.
@@ -89,6 +93,14 @@ impl Config {
     pub fn from_path(path: PathBuf) -> Result<Self, ConfigError> {
         if !path.exists() {
             return Err(ConfigError::MissingFile(path));
+        }
+        if let Ok(meta) = fs::metadata(&path)
+            && meta.len() > MAX_CONFIG_BYTES
+        {
+            return Err(ConfigError::Io(format!(
+                "config file {} is larger than {MAX_CONFIG_BYTES} bytes",
+                path.display()
+            )));
         }
         let raw = fs::read_to_string(&path)
             .map_err(|e| ConfigError::Io(format!("failed to read {}: {e}", path.display())))?;
@@ -260,6 +272,20 @@ mod tests {
         let err =
             Config::from_path(PathBuf::from("/nonexistent/coolify-qs/config.json")).unwrap_err();
         assert!(matches!(err, ConfigError::MissingFile(_)));
+    }
+
+    #[test]
+    fn rejects_oversized_config() {
+        let n = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("coolify-qs-oversized-{}-{}", std::process::id(), n));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_CONFIG_BYTES + 1).unwrap();
+        let err = Config::from_path(path).unwrap_err();
+        assert!(matches!(err, ConfigError::Io(_)));
+        assert!(err.to_string().contains("larger than"));
     }
 
     #[test]

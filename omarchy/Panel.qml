@@ -91,9 +91,11 @@ Panel {
             width: parent.width
             title: "Coolify"
             meta: Model.metaLine(root.status)
-            detail: root.isError
+            // PanelHero renders with AutoText; the error string can contain
+            // Coolify-controlled HTTP error text.
+            detail: Model.escapeText(root.isError
               ? (status.error || "Config error")
-              : "Deployments across your Coolify servers"
+              : "Deployments across your Coolify servers")
             foreground: root.foreground
             fontFamily: root.fontFamily
 
@@ -158,8 +160,10 @@ Panel {
         width: parent.width
         foreground: root.foreground
         fontFamily: root.fontFamily
-        text: (modelData.online ? "" : "\u2298 ") + modelData.name
-          + (modelData.online ? "" : " \u2014 offline")
+        // PanelSectionHeader has no textFormat (AutoText); the server name
+        // is user/Coolify-controlled.
+        text: Model.escapeText((modelData.online ? "" : "\u2298 ") + modelData.name
+          + (modelData.online ? "" : " \u2014 offline"))
       }
 
       Text {

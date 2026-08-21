@@ -275,6 +275,16 @@ test("shortName truncates with ellipsis", () => {
   assert.equal(Model.shortName("a-very-long-name", 14), "a-very-long-n\u2026");
 });
 
+test("escapeText neutralizes markup", () => {
+  assert.equal(Model.escapeText('plain'), 'plain');
+  assert.equal(Model.escapeText('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
+  assert.equal(Model.escapeText('a & b "c" \'d\''), 'a &amp; b &quot;c&quot; &#39;d&#39;');
+  assert.equal(Model.escapeText(''), '');
+  assert.equal(Model.escapeText(null), '');
+  // Glyphs used by the widget must pass through untouched.
+  assert.equal(Model.escapeText('\u27F3 \u23F3 \uD83D\uDE80'), '\u27F3 \u23F3 \uD83D\uDE80');
+});
+
 test("statusWord humanizes states", () => {
   assert.equal(Model.statusWord("in_progress"), "running");
   assert.equal(Model.statusWord("queued"), "queued");

@@ -7,12 +7,18 @@
 //!   `{"count": n, "deployments": [...]}` even though the reference docs
 //!   declare a bare array, so both shapes are accepted.
 
+use std::io::Read;
 use std::time::Duration;
 
 use serde::Deserialize;
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Hard cap on API response bodies. Coolify lists are far below this, and a
+/// misbehaving or hostile endpoint must not be able to drive unbounded
+/// memory use through `Response::text()`.
+pub const MAX_RESPONSE_BYTES: u64 = 5 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiError {
@@ -138,9 +144,14 @@ impl Client {
             .send()
             .map_err(|e| ApiError::Network(format!("{url}: {e}")))?;
         let status = response.status();
-        let body = response
-            .text()
+        // Read with a hard byte cap (`Read::take` stops after the limit, so
+        // the buffer is bounded even while the endpoint keeps sending).
+        let mut limited = response.take(MAX_RESPONSE_BYTES + 1);
+        let mut bytes = Vec::with_capacity(4096);
+        limited
+            .read_to_end(&mut bytes)
             .map_err(|e| ApiError::Network(format!("{url}: {e}")))?;
+        let body = decode_body(&url, &bytes)?;
         if !status.is_success() {
             let message = extract_message(&body).unwrap_or_else(|| format!("HTTP {status}"));
             return Err(ApiError::Http {
@@ -189,6 +200,17 @@ fn parse_deployments(value: serde_json::Value) -> Result<Vec<Deployment>, ApiErr
         other => serde_json::from_value(other),
     }
     .map_err(|e| ApiError::Decode(format!("list deployments: {e}")))
+}
+
+/// Reject bodies that exceed the cap (the reader stops at the cap, so
+/// `bytes` can only be larger by exactly one sentinel byte).
+fn decode_body(url: &str, bytes: &[u8]) -> Result<String, ApiError> {
+    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
+        return Err(ApiError::Decode(format!(
+            "{url}: response body exceeds {MAX_RESPONSE_BYTES} bytes"
+        )));
+    }
+    Ok(String::from_utf8_lossy(bytes).into_owned())
 }
 
 /// Coolify error bodies are `{"message": "..."}`.
@@ -276,6 +298,17 @@ mod tests {
     fn rejects_garbage() {
         let value = serde_json::from_str::<serde_json::Value>(r#"{"what": "is this"}"#).unwrap();
         assert!(matches!(parse_deployments(value), Err(ApiError::Decode(_))));
+    }
+
+    #[test]
+    fn decode_body_caps_response_size() {
+        assert_eq!(decode_body("u", b"ok").unwrap(), "ok");
+        let oversized = vec![0u8; (MAX_RESPONSE_BYTES + 1) as usize];
+        let err = decode_body("u", &oversized).unwrap_err();
+        assert!(matches!(err, ApiError::Decode(_)));
+        assert!(err.to_string().contains("exceeds"));
+        let at_limit = vec![0u8; MAX_RESPONSE_BYTES as usize];
+        assert!(decode_body("u", &at_limit).is_ok());
     }
 
     #[test]

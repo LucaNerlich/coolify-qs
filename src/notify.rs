@@ -126,17 +126,17 @@ impl Notifier {
 
         let (summary, body, urgency) = match notice.status.as_str() {
             "finished" => (
-                format!("\u{2713} {} deployed", notice.app),
+                format!("\u{2713} {} deployed", escape_markup(&notice.app)),
                 body_of(notice),
                 1u8,
             ),
             "failed" => (
-                format!("\u{2717} {} deployment failed", notice.app),
+                format!("\u{2717} {} deployment failed", escape_markup(&notice.app)),
                 body_of(notice),
                 2u8,
             ),
             _ => (
-                format!("\u{1F680} Coolify: {}", notice.app),
+                format!("\u{1F680} Coolify: {}", escape_markup(&notice.app)),
                 String::new(),
                 1u8,
             ),
@@ -174,12 +174,34 @@ impl Notifier {
 
 fn body_of(notice: &Notice) -> String {
     if notice.server.is_empty() {
-        return notice.message.clone();
+        return escape_markup(&notice.message);
     }
     if notice.message.is_empty() {
-        return notice.server.clone();
+        return escape_markup(&notice.server);
     }
-    format!("{} \u{00B7} {}", notice.server, notice.message)
+    format!(
+        "{} \u{00B7} {}",
+        escape_markup(&notice.server),
+        escape_markup(&notice.message)
+    )
+}
+
+/// Escape markup-significant characters so Coolify-controlled strings are
+/// displayed literally by the notification renderer, which treats the body
+/// as StyledText.
+fn escape_markup(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Running or queued — the states a deployment can leave when it settles.
@@ -315,5 +337,18 @@ mod tests {
         let notices = notifier.collect(&snapshot(done));
         assert_eq!(notices.len(), 5);
         assert_eq!(5usize.saturating_sub(MAX_INDIVIDUAL_NOTICES), 2);
+    }
+
+    #[test]
+    fn escapes_markup_in_summary_and_body() {
+        let notice = Notice {
+            status: "finished".into(),
+            server: "home".into(),
+            app: "<script>".into(),
+            message: "a < b & c".into(),
+        };
+        assert_eq!(escape_markup(&notice.app), "&lt;script&gt;");
+        assert_eq!(body_of(&notice), "home \u{00B7} a &lt; b &amp; c");
+        assert_eq!(escape_markup("plain"), "plain");
     }
 }
