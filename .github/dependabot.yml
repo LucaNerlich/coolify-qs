@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Keep the third-party action pins in release.yml (full commit SHAs, not
+  # movable refs) fresh with automated update PRs.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

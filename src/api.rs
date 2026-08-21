@@ -7,7 +7,9 @@
 //!   `{"count": n, "deployments": [...]}` even though the reference docs
 //!   declare a bare array, so both shapes are accepted.
 
+use std::collections::HashMap;
 use std::io::Read;
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -181,6 +183,44 @@ impl Client {
     }
 }
 
+/// Reuses one HTTP client per (url, token) pair across poll cycles, so the
+/// rustls configuration and connection pool survive between polls instead
+/// of being rebuilt for every server every cycle. Clients are only dropped
+/// when the reloaded config no longer contains their credentials.
+pub struct ClientCache {
+    clients: HashMap<(String, String), Arc<Client>>,
+}
+
+impl Default for ClientCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClientCache {
+    pub fn new() -> Self {
+        Self {
+            clients: HashMap::new(),
+        }
+    }
+
+    pub fn get(&mut self, url: &str, token: &str) -> Arc<Client> {
+        let key = (url.to_string(), token.to_string());
+        self.clients
+            .entry(key)
+            .or_insert_with(|| Arc::new(Client::new(url.to_string(), token.to_string())))
+            .clone()
+    }
+
+    /// Forget clients whose (url, token) pair left the config.
+    pub fn retain<'a>(&mut self, keys: impl Iterator<Item = (&'a str, &'a str)>) {
+        let keys: std::collections::HashSet<(String, String)> = keys
+            .map(|(url, token)| (url.to_string(), token.to_string()))
+            .collect();
+        self.clients.retain(|key, _| keys.contains(key));
+    }
+}
+
 /// Parse the deployments payload, accepting both the real envelope
 /// (`{"count": n, "deployments": [...]}`) and the bare array the reference
 /// docs (incorrectly) declare. Anything else is rejected.
@@ -329,5 +369,22 @@ mod tests {
         .unwrap();
         let list = parse_deployments(value).unwrap();
         assert_eq!(list[0].status, Some(DeploymentStatus::CancelledByUser));
+    }
+
+    #[test]
+    fn client_cache_reuses_and_drops_clients() {
+        let mut cache = ClientCache::new();
+        let first = cache.get("https://coolify.example.com", "tok");
+        let second = cache.get("https://coolify.example.com", "tok");
+        assert!(Arc::ptr_eq(&first, &second));
+
+        let other = cache.get("https://coolify.example.com", "other");
+        assert!(!Arc::ptr_eq(&first, &other));
+
+        // Clients whose credentials left the config are dropped, and a
+        // later re-add rebuilds them.
+        cache.retain([("https://coolify.example.com", "other")].into_iter());
+        let rebuilt = cache.get("https://coolify.example.com", "tok");
+        assert!(!Arc::ptr_eq(&first, &rebuilt));
     }
 }

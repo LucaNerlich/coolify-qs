@@ -12,6 +12,8 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Only the Publish step needs a token, and release creation is all it
+# needs from it.
 permissions:
   contents: write
 
@@ -20,21 +22,28 @@ jobs:
     name: verify bundle and publish GitHub release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Third-party actions are pinned to full commit SHAs so a moved or
+      # compromised ref cannot obtain the release-writing token.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Inspect committed ELF
         run: VERIFY_BUNDLE_SKIP_REBUILD=1 scripts/verify-bundle.sh
 
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
         with:
           targets: x86_64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: release-verify-musl
 
       - name: Marketplace bundle checks
         run: scripts/verify-bundle.sh
+
+      - name: Functional tests
+        run: |
+          cargo test --all-targets --locked
+          node omarchy/model.test.mjs
 
       - name: Package committed ELF
         run: scripts/package-release.sh

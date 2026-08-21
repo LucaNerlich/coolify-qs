@@ -94,13 +94,22 @@ impl Config {
         if !path.exists() {
             return Err(ConfigError::MissingFile(path));
         }
-        if let Ok(meta) = fs::metadata(&path)
-            && meta.len() > MAX_CONFIG_BYTES
-        {
-            return Err(ConfigError::Io(format!(
-                "config file {} is larger than {MAX_CONFIG_BYTES} bytes",
-                path.display()
-            )));
+        if let Ok(meta) = fs::metadata(&path) {
+            if meta.len() > MAX_CONFIG_BYTES {
+                return Err(ConfigError::Io(format!(
+                    "config file {} is larger than {MAX_CONFIG_BYTES} bytes",
+                    path.display()
+                )));
+            }
+            #[cfg(unix)]
+            if let Some(mode) = loose_permission_bits(&meta) {
+                eprintln!(
+                    "warning: {} has mode {mode:o} and is readable by other users; \
+                     run `chmod 600 {}` to protect the Coolify API tokens it contains",
+                    path.display(),
+                    path.display()
+                );
+            }
         }
         let raw = fs::read_to_string(&path)
             .map_err(|e| ConfigError::Io(format!("failed to read {}: {e}", path.display())))?;
@@ -170,6 +179,16 @@ fn parse_server(index: usize, raw: RawServer) -> Result<Server, ConfigError> {
         url: url.trim_end_matches('/').to_string(),
         token,
     })
+}
+
+/// On Unix, the file's permission bits when group or other users can read
+/// it. The config stores Coolify API tokens in plaintext, so a mode like
+/// 0644 leaks them to every local user.
+#[cfg(unix)]
+fn loose_permission_bits(meta: &fs::Metadata) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = meta.permissions().mode() & 0o777;
+    (mode & 0o077 != 0).then_some(mode)
 }
 
 /// Default config path: `$COOLIFY_QS_CONFIG`, else `$XDG_CONFIG_HOME/coolify-qs/config.json`
@@ -335,5 +354,39 @@ mod tests {
         );
         let err = Config::from_path(path).unwrap_err();
         assert!(err.to_string().contains("invalid url"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn world_readable_config_still_loads() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = tmp_config(
+            "loose",
+            r#"{ "servers": [{ "url": "https://coolify.example.com", "token": "abc" }] }"#,
+        );
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(Config::from_path(path).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn loose_permission_bits_flags_group_and_world_access() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = tmp_config("bits", r#"{"servers": []}"#);
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(
+            loose_permission_bits(&fs::metadata(&path).unwrap()),
+            Some(0o644)
+        );
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+        assert_eq!(
+            loose_permission_bits(&fs::metadata(&path).unwrap()),
+            Some(0o640)
+        );
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(loose_permission_bits(&fs::metadata(&path).unwrap()), None);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
+        assert_eq!(loose_permission_bits(&fs::metadata(&path).unwrap()), None);
     }
 }

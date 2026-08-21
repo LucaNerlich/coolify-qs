@@ -1,8 +1,11 @@
 //! Aggregated deployment status, serialized as one JSON line for the QML frontend.
 
+use std::sync::Arc;
+use std::thread;
+
 use serde::Serialize;
 
-use crate::api::{Client, Deployment, DeploymentStatus};
+use crate::api::{Client, ClientCache, Deployment, DeploymentStatus};
 use crate::config::{Config, Server};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -40,6 +43,11 @@ pub struct AppStatus {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fqdn: Option<String>,
+    /// Per-app deployment fetch failure (timeout, transient 5xx, app
+    /// deleted between calls). Keeps the app visible in the snapshot
+    /// instead of silently dropping it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub deployments: Vec<DeploymentItem>,
 }
 
@@ -89,13 +97,43 @@ pub fn current_snapshot() -> Status {
 /// Each server is polled independently: a failing server is reported as
 /// offline with its error while the others still contribute data. Only when
 /// every server fails (or none is configured) does the whole snapshot become
-/// an error state.
+/// an error state. One-shot helper with a fresh client cache.
 pub fn snapshot(config: &Config) -> Status {
-    let servers: Vec<ServerStatus> = config
+    snapshot_with_cache(config, &mut ClientCache::new())
+}
+
+/// Like [`snapshot`], but reuses the given cache across calls so the rustls
+/// configuration and connection pool survive between poll cycles. Servers
+/// are polled concurrently on scoped threads: one slow or offline server no
+/// longer delays the whole snapshot.
+pub fn snapshot_with_cache(config: &Config, cache: &mut ClientCache) -> Status {
+    cache.retain(
+        config
+            .servers
+            .iter()
+            .map(|server| (server.url.as_str(), server.token.as_str())),
+    );
+    let pairs: Vec<(&Server, Arc<Client>)> = config
         .servers
         .iter()
-        .map(|server| fetch_server(server, config.past_per_app))
+        .map(|server| {
+            let client = cache.get(&server.url, &server.token);
+            (server, client)
+        })
         .collect();
+    let servers: Vec<ServerStatus> = thread::scope(|scope| {
+        let handles: Vec<_> = pairs
+            .iter()
+            .map(|(server, client)| {
+                let client = Arc::clone(client);
+                scope.spawn(move || fetch_server(server, config.past_per_app, &client))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("server poll thread panicked"))
+            .collect()
+    });
     let online = servers.iter().filter(|s| s.online).count();
     if online == 0 {
         let message = servers
@@ -112,8 +150,7 @@ pub fn snapshot(config: &Config) -> Status {
     Status::ok(servers)
 }
 
-fn fetch_server(server: &Server, past_per_app: u32) -> ServerStatus {
-    let client = Client::new(server.url.clone(), server.token.clone());
+fn fetch_server(server: &Server, past_per_app: u32, client: &Client) -> ServerStatus {
     let apps = match client.list_applications() {
         Ok(list) => list,
         Err(err) => {
@@ -137,10 +174,20 @@ fn fetch_server(server: &Server, past_per_app: u32) -> ServerStatus {
 
     for app in apps {
         // A deployment fetch can fail for individual apps (e.g. an app that
-        // was deleted between calls); skip them, they have nothing to show.
+        // was deleted between calls). Surface the error on the app instead
+        // of silently dropping it from the snapshot.
         let deployments = match client.list_deployments(app.uuid(), past_per_app) {
             Ok(list) => list,
-            Err(_) => continue,
+            Err(err) => {
+                app_statuses.push(AppStatus {
+                    uuid: app.uuid().to_string(),
+                    name: app.name().to_string(),
+                    fqdn: app.fqdn,
+                    error: Some(err.to_string()),
+                    deployments: Vec::new(),
+                });
+                continue;
+            }
         };
         for deployment in &deployments {
             match deployment.status {
@@ -154,6 +201,7 @@ fn fetch_server(server: &Server, past_per_app: u32) -> ServerStatus {
             uuid: app.uuid().to_string(),
             name: app.name().to_string(),
             fqdn: app.fqdn,
+            error: None,
             deployments: deployments
                 .into_iter()
                 .map(|deployment| deployment_item(deployment, &server.url))
@@ -246,6 +294,7 @@ mod tests {
                 uuid: "u1".into(),
                 name: "website".into(),
                 fqdn: Some("example.com".into()),
+                error: None,
                 deployments: vec![DeploymentItem {
                     id: Some(10),
                     status: "in_progress".into(),

@@ -231,15 +231,16 @@ function deploymentText(deployment) {
   return statusWord(d.status);
 }
 
-// Only the apps that actually have deployment history. Apps without any
-// deployments would render as empty sections and are collapsed into a
-// single muted caption instead.
+// Apps with deployment history or a per-app fetch error. Apps with
+// neither would render as empty sections and are collapsed into a single
+// muted caption instead.
 function appsWithDeployments(apps) {
   var list = Array.isArray(apps) ? apps : [];
   var out = [];
   for (var i = 0; i < list.length; i++) {
     var deps = list[i] && list[i].deployments;
-    if (Array.isArray(deps) && deps.length > 0) out.push(list[i]);
+    var errored = !!(list[i] && list[i].error);
+    if ((Array.isArray(deps) && deps.length > 0) || errored) out.push(list[i]);
   }
   return out;
 }
@@ -255,20 +256,14 @@ function statusWord(status) {
   }
 }
 
-// Escape markup-significant characters so remote-derived strings can be
-// handed to AutoText/StyledText sinks (WidgetButton, PanelHero, section
-// headers, notification popups) without being interpreted.
-function escapeText(value) {
-  return String(value || "").replace(/[&<>"']/g, function(ch) {
-    switch (ch) {
-      case "&": return "&amp;";
-      case "<": return "&lt;";
-      case ">": return "&gt;";
-      case '"': return "&quot;";
-      case "'": return "&#39;";
-      default: return ch;
-    }
-  });
+// Replace markup-significant characters outright (not entity-escape) for
+// sinks that always render plain text: AutoText only parses markup when the
+// text contains a raw "<", and entity sequences without one draw verbatim —
+// "foo & bar" would show as "foo &amp; bar". Notification bodies go through
+// a real StyledText renderer, so those keep entity-escaping in the Rust
+// backend.
+function stripMarkup(value) {
+  return String(value || "").replace(/[&<>"']/g, "");
 }
 
 if (typeof module !== "undefined" && module.exports) {
@@ -276,6 +271,6 @@ if (typeof module !== "undefined" && module.exports) {
     parseLine, totals, labelText, tooltipText, metaLine, isIdle,
     relativeTime, statusGlyph, isActive, shortSha, hostLabel,
     serverLine, deploymentText, statusWord, collapseWhitespace,
-    appsWithDeployments, runningAppNames, shortName, escapeText
+    appsWithDeployments, runningAppNames, shortName, stripMarkup
   };
 }
