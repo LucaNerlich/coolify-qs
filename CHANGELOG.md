@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Notifications disabled in the config no longer stale the notifier's
+  state map: transitions keep being tracked while toasts are off, so
+  re-enabling notifications does not replay long-settled deployments.
+- A failed per-app deployment fetch now surfaces the error on the app row
+  instead of silently dropping the app from the snapshot.
+- Servers are polled concurrently and HTTP clients are cached per
+  (url, token) pair, and `watch` schedules from the cycle start, so one
+  slow or offline server no longer drags out the whole refresh cadence.
+- AutoText sinks (bar label, tooltip, panel hero detail, section headers)
+  now strip markup characters instead of entity-escaping them, so names
+  containing `& < > " '` render literally instead of showing `&amp;`-style
+  escape sequences.
+- Long fqdns elide inside their column, server section headers elide, and
+  the hero detail pill is length-capped, so long names and error strings
+  no longer bleed into neighboring columns.
+- A failed action start retries once with the alternate binary instead of
+  respawning the same failing one, and clicks arriving while an action
+  runs are queued (latest wins) instead of being dropped.
+- On multi-monitor setups only one widget instance now owns the
+  `coolify-qs watch` process; peers receive snapshots through the bar
+  broadcast mechanism, so polling and notifications no longer run once
+  per monitor.
+
+### Security
+
+- The backend warns (on stderr) when the token-bearing config file is
+  readable by group or other users, instead of silently accepting it.
+- `scripts/verify-bundle.sh` anchors its rustfmt/clippy checks to the
+  `components` assignment in rust-toolchain.toml and fails when the
+  `verify-bundle` CI job is missing or renamed, so the marketplace
+  attestations can no longer be silently skipped.
+- Tagged releases run the test suites before publishing, and the release
+  workflow's third-party actions are pinned to full commit SHAs (kept
+  fresh by Dependabot) so a moved ref cannot obtain the release-writing
+  token.
+
 ## [1.0.2] - 2026-08-21
 
 ### Security

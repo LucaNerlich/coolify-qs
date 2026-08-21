@@ -78,16 +78,22 @@ if grep -Eq '^strip[[:space:]]*=[[:space:]]*(true|"symbols"|"all")' "$repo_root/
 fi
 grep -q '^strip = "debuginfo"' "$repo_root/Cargo.toml" || fail "Cargo.toml [profile.release] must set strip = \"debuginfo\" so nm can inspect the bundle"
 
-grep -q 'rustfmt' "$repo_root/rust-toolchain.toml" || fail "rust-toolchain.toml must pin rustfmt on this channel (installing it only on stable skips CI format, which used to skip this job)"
-grep -q 'clippy' "$repo_root/rust-toolchain.toml" || fail "rust-toolchain.toml must pin clippy on this channel"
+# Anchor to the components assignment itself: the header comment above also
+# mentions rustfmt/clippy, and matching on the words anywhere would keep
+# passing after the components were removed.
+grep -Eq '^components *=.*rustfmt' "$repo_root/rust-toolchain.toml" || fail "rust-toolchain.toml must pin rustfmt in components (installing it only on stable skips CI format, which used to skip this job)"
+grep -Eq '^components *=.*clippy' "$repo_root/rust-toolchain.toml" || fail "rust-toolchain.toml must pin clippy in components"
 
+# Fails when the verify-bundle job is missing or renamed (the sentinel was
+# never seen) or when a needs: line appears inside it (which would let a
+# skipped prerequisite skip this attestation).
 if awk '
-  $0 == "  verify-bundle:" {in_job=1; next}
+  $0 == "  verify-bundle:" {seen=1; in_job=1; next}
   in_job && /^  [A-Za-z0-9_-]+:/ {in_job=0}
-  in_job && /^    needs:/ {exit 0}
-  END {exit 1}
+  in_job && /^    needs:/ {bad=1}
+  END { exit (seen && !bad) ? 1 : 0 }
 ' "$repo_root/.github/workflows/ci.yml"; then
-  fail "CI job verify-bundle must not use needs: (a failed format check must not skip this attestation)"
+  fail "CI job verify-bundle must exist and must not use needs: (a failed format check must not skip this attestation)"
 fi
 
 crate_version="$(awk -F '"' '/^version = / {print $2; exit}' "$repo_root/Cargo.toml")"

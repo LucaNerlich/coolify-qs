@@ -45,39 +45,58 @@ impl Notifier {
         }
     }
 
-    /// Seed or update the state map from a snapshot and send notifications
-    /// for every deployment that just finished or failed.
-    pub fn process(&mut self, snapshot: &Status) {
+    /// Seed or update the state map from a snapshot and — when `notify` is
+    /// true — send notifications for every deployment that just finished or
+    /// failed. The state tracking runs regardless of the flag, so toggling
+    /// notifications off and back on never replays settled history.
+    pub fn process(&mut self, snapshot: &Status, notify: bool) {
         let notices = self.collect(snapshot);
-        self.send(notices);
+        if notify {
+            self.send(notices);
+        }
     }
 
     /// Pure transition detection, kept separate from the D-Bus side so it
     /// can be unit-tested without a bus.
     fn collect(&mut self, snapshot: &Status) -> Vec<Notice> {
+        // Error snapshots carry no servers; leave the seen-map alone so a
+        // transient config or API failure does not forget deployments that
+        // were running when it hit.
+        let Some(servers) = &snapshot.servers else {
+            return Vec::new();
+        };
+
         let mut current = HashMap::new();
         let mut notices = Vec::new();
 
-        if let Some(servers) = &snapshot.servers {
-            for server in servers {
-                for app in &server.apps {
-                    for deployment in &app.deployments {
-                        let Some(id) = deployment.id else {
-                            continue;
-                        };
-                        let key = (server.url.clone(), app.uuid.clone(), id);
-                        current.insert(key.clone(), deployment.status.clone());
-                        let Some(previous) = self.seen.get(&key) else {
-                            continue;
-                        };
-                        if is_active(previous) && is_finished_or_failed(&deployment.status) {
-                            notices.push(Notice {
-                                status: deployment.status.clone(),
-                                server: server.name.clone(),
-                                app: app.name.clone(),
-                                message: collapse(&deployment.commit_message),
-                            });
+        for server in servers {
+            for app in &server.apps {
+                // When an app has a per-app error (fetch failure), copy its
+                // prior deployment states into current so they survive the error
+                // and can still notify when the app recovers.
+                if app.error.is_some() {
+                    for (key, status) in &self.seen {
+                        if key.0 == server.url && key.1 == app.uuid {
+                            current.insert(key.clone(), status.clone());
                         }
+                    }
+                }
+                for deployment in &app.deployments {
+                    let Some(id) = deployment.id else {
+                        continue;
+                    };
+                    let key = (server.url.clone(), app.uuid.clone(), id);
+                    current.insert(key.clone(), deployment.status.clone());
+                    let Some(previous) = self.seen.get(&key) else {
+                        continue;
+                    };
+                    if is_active(previous) && is_finished_or_failed(&deployment.status) {
+                        notices.push(Notice {
+                            status: deployment.status.clone(),
+                            server: server.name.clone(),
+                            app: app.name.clone(),
+                            message: collapse(&deployment.commit_message),
+                        });
                     }
                 }
             }
@@ -241,6 +260,7 @@ mod tests {
                     uuid: "u1".into(),
                     name: "website".into(),
                     fqdn: None,
+                    error: None,
                     deployments,
                 }],
             }]),
@@ -291,6 +311,35 @@ mod tests {
             item(2, "in_progress"),
         ]));
         assert!(notices.is_empty());
+    }
+
+    #[test]
+    fn disabled_notifications_still_track_transitions() {
+        let mut notifier = Notifier::new();
+        // While notifications are off, the map must keep up to date...
+        notifier.process(&snapshot(vec![item(1, "in_progress")]), false);
+        // ...so re-enabling later does not replay long-settled history.
+        notifier.process(&snapshot(vec![item(1, "finished")]), true);
+        let notices = notifier.collect(&snapshot(vec![item(1, "finished")]));
+        assert!(notices.is_empty());
+    }
+
+    #[test]
+    fn error_snapshots_leave_the_seen_map_alone() {
+        let mut notifier = Notifier::new();
+        notifier.collect(&snapshot(vec![item(1, "in_progress")]));
+
+        // A config/API failure snapshot must not forget the running
+        // deployment: once the server reappears finished, the transition
+        // still notifies.
+        assert!(
+            notifier
+                .collect(&Status::error("config file not found: /x"))
+                .is_empty()
+        );
+        let notices = notifier.collect(&snapshot(vec![item(1, "finished")]));
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].status, "finished");
     }
 
     #[test]
@@ -350,5 +399,43 @@ mod tests {
         assert_eq!(escape_markup(&notice.app), "&lt;script&gt;");
         assert_eq!(body_of(&notice), "home \u{00B7} a &lt; b &amp; c");
         assert_eq!(escape_markup("plain"), "plain");
+    }
+
+    #[test]
+    fn per_app_error_preserves_deployment_state() {
+        let mut notifier = Notifier::new();
+        // Start with an active deployment
+        notifier.collect(&snapshot(vec![item(1, "in_progress")]));
+
+        // Per-app error arrives (deployments array empty due to fetch failure)
+        let error_snapshot = Status {
+            state: State::Ok,
+            error: None,
+            servers: Some(vec![ServerStatus {
+                name: "home".into(),
+                url: "https://coolify.example.com".into(),
+                online: true,
+                running: 0,
+                queued: 0,
+                failed: 0,
+                error: None,
+                apps: vec![AppStatus {
+                    uuid: "u1".into(),
+                    name: "website".into(),
+                    fqdn: None,
+                    error: Some("timeout fetching deployments".into()),
+                    deployments: vec![],
+                }],
+            }]),
+        };
+        let notices = notifier.collect(&error_snapshot);
+        assert!(notices.is_empty());
+
+        // App recovers and deployment finished: must notify because the
+        // in_progress state survived the error.
+        let notices = notifier.collect(&snapshot(vec![item(1, "finished")]));
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].status, "finished");
+        assert_eq!(notices[0].app, "website");
     }
 }

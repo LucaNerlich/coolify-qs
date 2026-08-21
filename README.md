@@ -179,13 +179,16 @@ unavailable, so plugin QML changes only take effect after a full
 ## Security
 
 Coolify-controlled values — application and server names, fqdns, commit
-messages, HTTP error text — are escaped before they reach markup-capable
+messages, HTTP error text — are sanitized before display: QML plain-text
 sinks (the bar label and tooltip, the panel hero detail, server section
-headers, and the notification summary/body, which the Omarchy notification
-renderer treats as StyledText), so a hostile commit message can never be
-interpreted as markup. All other QML text is `Text.PlainText`. API response
-bodies are capped at 5 MiB (and the config file at 1 MiB), and the
-`open` action only forwards http/https URLs to `xdg-open`.
+headers) strip markup-significant characters (`& < > " '`), while
+notification summary/body values are entity-escaped by the Rust backend
+for the StyledText renderer. All other QML text is `Text.PlainText`. This
+ensures a hostile commit message can never be interpreted as markup. API response
+bodies are capped at 5 MiB (and the config file at 1 MiB), the `open`
+action only forwards http/https URLs to `xdg-open`, and the backend warns
+when the token-bearing config file is readable by other users (see
+`chmod 600` above).
 
 ## API notes
 

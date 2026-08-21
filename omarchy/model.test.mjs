@@ -239,15 +239,17 @@ test("deploymentText collapses multi-line messages", () => {
   );
 });
 
-test("appsWithDeployments filters empty apps", () => {
+test("appsWithDeployments filters empty apps but keeps errored ones", () => {
   const apps = [
     { name: "a", deployments: [{ status: "finished" }] },
     { name: "b", deployments: [] },
     { name: "c", deployments: null },
+    { name: "d", deployments: [], error: "HTTP 500" },
   ];
   const shown = Model.appsWithDeployments(apps);
-  assert.equal(shown.length, 1);
+  assert.equal(shown.length, 2);
   assert.equal(shown[0].name, "a");
+  assert.equal(shown[1].name, "d");
   assert.equal(Model.appsWithDeployments(null).length, 0);
   assert.equal(Model.appsWithDeployments("nope").length, 0);
 });
@@ -275,14 +277,14 @@ test("shortName truncates with ellipsis", () => {
   assert.equal(Model.shortName("a-very-long-name", 14), "a-very-long-n\u2026");
 });
 
-test("escapeText neutralizes markup", () => {
-  assert.equal(Model.escapeText('plain'), 'plain');
-  assert.equal(Model.escapeText('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
-  assert.equal(Model.escapeText('a & b "c" \'d\''), 'a &amp; b &quot;c&quot; &#39;d&#39;');
-  assert.equal(Model.escapeText(''), '');
-  assert.equal(Model.escapeText(null), '');
+test("stripMarkup removes markup-significant characters", () => {
+  assert.equal(Model.stripMarkup("plain"), "plain");
+  assert.equal(Model.stripMarkup("<b>x</b>"), "bx/b");
+  assert.equal(Model.stripMarkup("a & b \"c\" 'd'"), "a  b c d");
+  assert.equal(Model.stripMarkup(""), "");
+  assert.equal(Model.stripMarkup(null), "");
   // Glyphs used by the widget must pass through untouched.
-  assert.equal(Model.escapeText('\u27F3 \u23F3 \uD83D\uDE80'), '\u27F3 \u23F3 \uD83D\uDE80');
+  assert.equal(Model.stripMarkup("\u27F3 \u23F3 \uD83D\uDE80"), "\u27F3 \u23F3 \uD83D\uDE80");
 });
 
 test("statusWord humanizes states", () => {

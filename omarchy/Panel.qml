@@ -91,11 +91,13 @@ Panel {
             width: parent.width
             title: "Coolify"
             meta: Model.metaLine(root.status)
-            // PanelHero renders with AutoText; the error string can contain
-            // Coolify-controlled HTTP error text.
-            detail: Model.escapeText(root.isError
+            // PanelHero renders with AutoText, which only parses markup on
+            // a raw "<"; strip markup characters so error text shows
+            // literally, and cap the length so the detail pill cannot
+            // grow past the panel.
+            detail: Model.shortName(Model.stripMarkup(root.isError
               ? (status.error || "Config error")
-              : "Deployments across your Coolify servers")
+              : "Deployments across your Coolify servers"), 60)
             foreground: root.foreground
             fontFamily: root.fontFamily
 
@@ -160,10 +162,13 @@ Panel {
         width: parent.width
         foreground: root.foreground
         fontFamily: root.fontFamily
-        // PanelSectionHeader has no textFormat (AutoText); the server name
-        // is user/Coolify-controlled.
-        text: Model.escapeText((modelData.online ? "" : "\u2298 ") + modelData.name
+        // PanelSectionHeader is a plain Text (no rich text, no elide of its
+        // own). Strip markup characters and elide here so long server names
+        // cannot paint into the neighboring server column.
+        text: Model.stripMarkup((modelData.online ? "" : "\u2298 ") + modelData.name
           + (modelData.online ? "" : " \u2014 offline"))
+        elide: Text.ElideRight
+        wrapMode: Text.NoWrap
       }
 
       Text {
@@ -243,6 +248,9 @@ Panel {
 
         Text {
           visible: !!modelData.fqdn
+          // Fill the remaining row width so elide actually activates for
+          // long fqdns instead of painting past the 300 px column.
+          Layout.fillWidth: true
           text: modelData.fqdn || ""
           textFormat: Text.PlainText
           color: Qt.darker(root.foreground, 1.4)
@@ -251,6 +259,18 @@ Panel {
           elide: Text.ElideRight
           wrapMode: Text.NoWrap
         }
+      }
+
+      Text {
+        width: parent.width
+        visible: !(modelData.deployments && modelData.deployments.length > 0)
+          && !!modelData.error
+        text: Model.shortName(modelData.error || "", 200)
+        textFormat: Text.PlainText
+        color: root.urgent
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
       }
 
       Repeater {
