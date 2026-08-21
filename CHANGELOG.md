@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.3] - 2026-08-21
 
 ### Fixed
 
@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state map: transitions keep being tracked while toasts are off, so
   re-enabling notifications does not replay long-settled deployments.
 - A failed per-app deployment fetch now surfaces the error on the app row
-  instead of silently dropping the app from the snapshot.
+  instead of silently dropping the app from the snapshot, and the notifier
+  retains the app's deployment state so a deployment that settles while the
+  fetch fails still notifies when the app recovers.
 - Servers are polled concurrently and HTTP clients are cached per
   (url, token) pair, and `watch` schedules from the cycle start, so one
   slow or offline server no longer drags out the whole refresh cadence.
