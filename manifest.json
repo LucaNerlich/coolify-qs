@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "luca.coolify",
+  "name": "Coolify",
+  "version": "0.1.0",
+  "author": "Luca Nerlich",
+  "license": "Apache-2.0",
+  "description": "Shows deployment activity across your Coolify servers: running and queued deployments in the bar, with current and recent deployments per application in the panel. Requires ~/.config/coolify-qs/config.json.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "omarchy/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Coolify",
+    "description": "Running and queued deployments across your Coolify servers, with a per-application deployment list.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hideWhenIdle": false
+    },
+    "schema": [
+      {
+        "key": "hideWhenIdle",
+        "type": "boolean",
+        "label": "Hide when idle",
+        "description": "Hide the widget entirely when no deployment is running or queued on any server.",
+        "defaultValue": false
+      }
+    ]
+  }
+}
