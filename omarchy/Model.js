@@ -169,12 +169,18 @@ function serverLine(server) {
   return host + " \u00B7 " + parts.join(" ");
 }
 
+// Collapse runs of whitespace (including newlines in multi-line commit
+// messages) into single spaces, so rows wrap cleanly in one line block.
+function collapseWhitespace(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 // One-line deployment summary: commit message + short sha, falling back to
 // the deployment id and finally the status word so rows without git data
 // still read as something ("#123", "finished") instead of an empty entry.
 function deploymentText(deployment) {
   var d = deployment || {};
-  var msg = String(d.commitMessage || "").trim();
+  var msg = collapseWhitespace(d.commitMessage);
   var sha = shortSha(d.commit);
   if (msg !== "" && sha !== "") return msg + " \u00B7 " + sha;
   if (msg !== "") return msg;
@@ -182,6 +188,19 @@ function deploymentText(deployment) {
   var id = Number(d.id);
   if (isFinite(id) && id > 0) return "#" + id;
   return statusWord(d.status);
+}
+
+// Only the apps that actually have deployment history. Apps without any
+// deployments would render as empty sections and are collapsed into a
+// single muted caption instead.
+function appsWithDeployments(apps) {
+  var list = Array.isArray(apps) ? apps : [];
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var deps = list[i] && list[i].deployments;
+    if (Array.isArray(deps) && deps.length > 0) out.push(list[i]);
+  }
+  return out;
 }
 
 function statusWord(status) {
@@ -199,6 +218,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseLine, totals, labelText, tooltipText, metaLine, isIdle,
     relativeTime, statusGlyph, isActive, shortSha, hostLabel,
-    serverLine, deploymentText, statusWord
+    serverLine, deploymentText, statusWord, collapseWhitespace,
+    appsWithDeployments
   };
 }

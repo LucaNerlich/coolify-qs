@@ -210,6 +210,29 @@ test("deploymentText falls back to id and status", () => {
   assert.equal(Model.deploymentText({ commitMessage: "  ", commit: "", status: "queued" }), "queued");
 });
 
+test("deploymentText collapses multi-line messages", () => {
+  assert.equal(
+    Model.deploymentText({
+      commitMessage: "fix: use system font stack\n\nnext/font fails\n\n  two spaces",
+      commit: "ae32b688",
+    }),
+    "fix: use system font stack next/font fails two spaces \u00B7 ae32b68",
+  );
+});
+
+test("appsWithDeployments filters empty apps", () => {
+  const apps = [
+    { name: "a", deployments: [{ status: "finished" }] },
+    { name: "b", deployments: [] },
+    { name: "c", deployments: null },
+  ];
+  const shown = Model.appsWithDeployments(apps);
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].name, "a");
+  assert.equal(Model.appsWithDeployments(null).length, 0);
+  assert.equal(Model.appsWithDeployments("nope").length, 0);
+});
+
 test("statusWord humanizes states", () => {
   assert.equal(Model.statusWord("in_progress"), "running");
   assert.equal(Model.statusWord("queued"), "queued");

@@ -151,6 +151,9 @@ Panel {
       width: root.serverColumnWidth
       spacing: Style.space(6)
 
+      readonly property var shownApps: Model.appsWithDeployments(modelData.apps)
+      readonly property int hiddenAppCount: (modelData.apps || []).length - shownApps.length
+
       PanelSectionHeader {
         width: parent.width
         foreground: root.foreground
@@ -187,8 +190,21 @@ Panel {
       }
 
       Repeater {
-        model: modelData.online ? modelData.apps : []
+        model: serverColumn.shownApps
         delegate: appDelegate
+      }
+
+      Text {
+        width: parent.width
+        visible: serverColumn.hiddenAppCount > 0
+        text: serverColumn.hiddenAppCount === 1
+          ? "1 app without deployments"
+          : serverColumn.hiddenAppCount + " apps without deployments"
+        textFormat: Text.PlainText
+        color: Qt.darker(root.foreground, 1.5)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
       }
     }
   }
@@ -237,15 +253,6 @@ Panel {
         model: modelData.deployments || []
         delegate: deploymentDelegate
       }
-
-      Text {
-        visible: (modelData.deployments || []).length === 0
-        text: "no deployments yet"
-        textFormat: Text.PlainText
-        color: Qt.darker(root.foreground, 1.5)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-      }
     }
   }
 
@@ -256,6 +263,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
+        Layout.alignment: Qt.AlignTop
         text: Model.statusGlyph(modelData.status)
         textFormat: Text.PlainText
         color: Model.isActive(modelData.status) ? root.active
@@ -265,19 +273,23 @@ Panel {
         font.pixelSize: Style.font.body
       }
 
+      // Wraps inside the column instead of eliding to a stub, so long
+      // commit messages stay readable and never spill into the next
+      // server column.
       Text {
         Layout.fillWidth: true
+        Layout.alignment: Qt.AlignTop
         text: Model.deploymentText(modelData)
         textFormat: Text.PlainText
         color: Model.isActive(modelData.status) ? root.foreground
           : Qt.darker(root.foreground, 1.4)
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
-        elide: Text.ElideRight
-        wrapMode: Text.NoWrap
+        wrapMode: Text.WordWrap
       }
 
       Text {
+        Layout.alignment: Qt.AlignTop
         text: Model.relativeTime(modelData.createdAt)
         textFormat: Text.PlainText
         color: Qt.darker(root.foreground, 1.5)

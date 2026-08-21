@@ -75,6 +75,9 @@ pub enum DeploymentStatus {
     Finished,
     Failed,
     Cancelled,
+    /// Coolify's own spelling of a user-cancelled deployment.
+    #[serde(alias = "cancelled-by-user")]
+    CancelledByUser,
     #[serde(other)]
     Other,
 }
@@ -86,7 +89,7 @@ impl DeploymentStatus {
             Self::InProgress => "in_progress",
             Self::Finished => "finished",
             Self::Failed => "failed",
-            Self::Cancelled => "cancelled",
+            Self::Cancelled | Self::CancelledByUser => "cancelled",
             Self::Other => "other",
         }
     }
@@ -269,5 +272,16 @@ mod tests {
         assert_eq!(DeploymentStatus::Finished.as_str(), "finished");
         assert_eq!(DeploymentStatus::Failed.as_str(), "failed");
         assert_eq!(DeploymentStatus::Cancelled.as_str(), "cancelled");
+        assert_eq!(DeploymentStatus::CancelledByUser.as_str(), "cancelled");
+    }
+
+    #[test]
+    fn parses_cancelled_by_user_status() {
+        let value = serde_json::from_str::<serde_json::Value>(
+            r#"[{ "id": 1, "status": "cancelled-by-user" }]"#,
+        )
+        .unwrap();
+        let list = parse_deployments(value).unwrap();
+        assert_eq!(list[0].status, Some(DeploymentStatus::CancelledByUser));
     }
 }
