@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-21
+
+### Security
+
+- Escape Coolify-controlled strings (server and application names, fqdns,
+  commit messages, HTTP error text) at every markup-capable sink — the bar
+  label, tooltip, panel hero detail, server section headers, and the
+  notification summary/body (the notification renderer treats the body as
+  StyledText) — so a hostile commit message can never be interpreted as
+  markup.
+- Cap HTTP response bodies at 5 MiB (bounded while streaming) and the
+  config file at 1 MiB, so a misbehaving endpoint cannot drive unbounded
+  memory use. `open --url` additionally refuses URLs the URL crate does
+  not parse as http/https.
+
 ## [1.0.1] - 2026-08-21
 
 ### Added
