@@ -23,7 +23,7 @@ jobs:
       # Match rust-toolchain.toml. `@stable` installs clippy/rustfmt on the
       # `stable` toolchain name, but the pin overrides cargo to `1.97.1`, which
       # then fails `cargo fmt` with "cargo-fmt is not installed".
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: clippy, rustfmt
 
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: dtolnay/rust-toolchain@1.100.0
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -75,7 +75,7 @@ jobs:
 
       # Pin to the toolchain in rust-toolchain.toml so the check reproduces
       # the exact binary that was committed.
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: x86_64-unknown-linux-musl
 
