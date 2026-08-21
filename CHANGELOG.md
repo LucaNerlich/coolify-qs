@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - 2026-08-21
 
 ### Added
 
@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deployment finishes (`✓ website deployed`) or fails (`✗ website deployment
   failed`), with commit message and server in the body. Opt out per config
   with `"notifications": false`.
+
+### Fixed
+
+- The bundle's TLS stack is now pure Rust (oxitls RustCrypto provider plus
+  bundled webpki-roots certificates): the ring build required a C
+  cross-compiler whose version drift made the marketplace byte-for-byte
+  rebuild machine-dependent. The bundle now reproduces identically on any
+  machine, with no C toolchain in CI.
 
 ## [1.0.0] - 2026-08-21
 
