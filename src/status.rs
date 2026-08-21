@@ -193,10 +193,10 @@ fn deployment_item(deployment: Deployment, server_url: &str) -> DeploymentItem {
     };
     // Coolify returns UI-relative deployment URLs ("/project/…"); make them
     // absolute so the panel can open them in the browser.
-    if let Some(url) = &item.deployment_url {
-        if url.starts_with('/') {
-            item.deployment_url = Some(format!("{}{}", origin(server_url), url));
-        }
+    if let Some(url) = &item.deployment_url
+        && url.starts_with('/')
+    {
+        item.deployment_url = Some(format!("{}{}", origin(server_url), url));
     }
     item
 }

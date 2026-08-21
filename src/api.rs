@@ -103,7 +103,20 @@ pub struct Client {
 
 impl Client {
     pub fn new(base_url: String, token: String) -> Self {
+        // Pure-Rust TLS (oxitls RustCrypto provider + bundled Mozilla roots):
+        // no C crypto, so the musl bundle is byte-reproducible on any machine
+        // without a C cross-compiler.
+        let tls = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+            oxitls_rustcrypto_provider::provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("default protocol versions are valid")
+        .with_root_certificates(rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+        })
+        .with_no_client_auth();
         let http = reqwest::blocking::Client::builder()
+            .use_preconfigured_tls(tls)
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             .user_agent(concat!("coolify-qs/", env!("CARGO_PKG_VERSION")))
